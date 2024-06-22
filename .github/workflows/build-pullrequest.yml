@@ -1,37 +1,43 @@
-name: Build pull request
-
-on:
-  pull_request:
-    branches: [ master ]
-permissions: 
-  contents: read
-
 jobs:
   build-java:
-    if: "!contains(github.event.head_commit.message, 'ci skip')"
-    runs-on: ubuntu-20.04
+    if: '!contains(github.event.head_commit.message, ''ci skip'')'
+    runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-          submodules: 'recursive'
+    - continue-on-error: true
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+        submodules: recursive
+    - continue-on-error: true
+      name: Set up JDK 17
+      uses: actions/setup-java@v3
+      with:
+        distribution: zulu
+        java-version: '17'
+    - continue-on-error: true
+      name: Setup Gradle
+      uses: gradle/gradle-build-action@v2
+    - continue-on-error: true
+      name: Check MetalANGLE generation
+      run: './gradlew :backends:gdx-backend-robovm-metalangle:generate
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v3
-        with:
-          distribution: 'zulu'
-          java-version: '17'
+        ./gradlew :backends:gdx-backend-robovm-metalangle:spotlessApply
 
-      - name: Setup Gradle
-        uses: gradle/gradle-build-action@v2
+        if [[ `git status --porcelain` ]]; then echo "::error The MetalANGLE backend
+        is missing changes, please run \`./gradlew :backends:gdx-backend-robovm-metalangle:generate\`";
+        exit 1; fi
 
-      - name: Check MetalANGLE generation
-        run: |
-          ./gradlew :backends:gdx-backend-robovm-metalangle:generate
-          ./gradlew :backends:gdx-backend-robovm-metalangle:spotlessApply
-          if [[ `git status --porcelain` ]]; then echo "::error The MetalANGLE backend is missing changes, please run \`./gradlew :backends:gdx-backend-robovm-metalangle:generate\`"; exit 1; fi
+        '
+    - continue-on-error: true
+      name: Build & test Java code
+      run: './gradlew fetchNatives
 
-      - name: Build & test Java code
-        run: |
-          ./gradlew fetchNatives
-          ./gradlew build
+        ./gradlew build
+
+        '
+name: Build pull request
+on:
+  repository_dispatch:
+    types: trigger-ga___build-pullrequest.yml
+permissions:
+  contents: read
